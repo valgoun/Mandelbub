@@ -15,6 +15,7 @@ public class MandelbulbCPU : MonoBehaviour {
     private float rotationSpeed;
     private int depth;
 
+    private static bool CanMove = false;
     private static Text texte = null;
     private static int MeshNb = 0;
     private Material[,] materials;
@@ -35,12 +36,18 @@ public class MandelbulbCPU : MonoBehaviour {
         materials[maxDepth, 1].color = Color.red;
     }
 
+    public void EnableMovement()
+    {
+        CanMove = !CanMove;
+    }
+
     private static Vector3[] childDirections = {
         Vector3.up,
         Vector3.right,
         Vector3.left,
         Vector3.forward,
-        Vector3.back
+        Vector3.back,
+        Vector3.down
     };
 
     private static Quaternion[] childOrientations = {
@@ -48,7 +55,8 @@ public class MandelbulbCPU : MonoBehaviour {
         Quaternion.Euler(0f, 0f, -90f),
         Quaternion.Euler(0f, 0f, 90f),
         Quaternion.Euler(90f, 0f, 0f),
-        Quaternion.Euler(-90f, 0f, 0f)
+        Quaternion.Euler(-90f, 0f, 0f),
+        Quaternion.Euler(0f, 180f, 0f)
     };
 
     private void Start()
@@ -63,7 +71,10 @@ public class MandelbulbCPU : MonoBehaviour {
             InitializeMaterials();
         }
         gameObject.AddComponent<MeshFilter>().mesh = meshes[Random.Range(0, meshes.Length)];
-        gameObject.AddComponent<MeshRenderer>().material = materials[depth, Random.Range(0,2)];
+        var mat = new Material(material);
+        mat.color = new Color(Random.value, Random.value, Random.value);
+        gameObject.AddComponent<MeshRenderer>().material = mat;
+        //gameObject.AddComponent<MeshRenderer>().material = materials[depth, Random.Range(0, 2)];
         if (depth < maxDepth)
         {
             StartCoroutine(CreateChildren());
@@ -72,7 +83,7 @@ public class MandelbulbCPU : MonoBehaviour {
 
     private void Update()
     {
-        transform.Rotate(0f, rotationSpeed * Time.deltaTime, 0f);
+        if(CanMove) transform.Rotate(0f, rotationSpeed * Time.deltaTime, 0f);
     }
 
     private void Initialize(MandelbulbCPU parent, int childIndex)
