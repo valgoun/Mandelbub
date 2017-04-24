@@ -6,13 +6,34 @@ using UnityEngine.UI;
 public class MandelbulbCPU : MonoBehaviour {
     public int maxDepth;
     public float childScale;
-    public Mesh mesh;
+    public Mesh[] meshes;
     public Material material;
+    public float spawnProbability;
+    public float maxRotationSpeed;
+    public float maxTwist;
 
+    private float rotationSpeed;
     private int depth;
 
     private static Text texte = null;
     private static int MeshNb = 0;
+    private Material[,] materials;
+
+    private void InitializeMaterials()
+    {
+        materials = new Material[maxDepth + 1, 2];
+        for (int i = 0; i <= maxDepth; i++)
+        {
+            float t = i / (maxDepth - 1f);
+            t *= t;
+            materials[i, 0] = new Material(material);
+            materials[i, 0].color = Color.Lerp(Color.white, Color.yellow, t);
+            materials[i, 1] = new Material(material);
+            materials[i, 1].color = Color.Lerp(Color.white, Color.cyan, t);
+        }
+        materials[maxDepth, 0].color = Color.magenta;
+        materials[maxDepth, 1].color = Color.red;
+    }
 
     private static Vector3[] childDirections = {
         Vector3.up,
@@ -32,20 +53,35 @@ public class MandelbulbCPU : MonoBehaviour {
 
     private void Start()
     {
-        if(texte == null)
+        rotationSpeed = Random.Range(-maxRotationSpeed, maxRotationSpeed);
+        transform.Rotate(Random.Range(-maxTwist, maxTwist), 0f, 0f);
+        gameObject.isStatic = true;
+        if (texte == null)
             texte = GameObject.Find("meshText").GetComponent<Text>();
-        gameObject.AddComponent<MeshFilter>().mesh = mesh;
-        gameObject.AddComponent<MeshRenderer>().material = material;
+        if (materials == null)
+        {
+            InitializeMaterials();
+        }
+        gameObject.AddComponent<MeshFilter>().mesh = meshes[Random.Range(0, meshes.Length)];
+        gameObject.AddComponent<MeshRenderer>().material = materials[depth, Random.Range(0,2)];
         if (depth < maxDepth)
         {
             StartCoroutine(CreateChildren());
         }
-        gameObject.isStatic = true;
+    }
+
+    private void Update()
+    {
+        transform.Rotate(0f, rotationSpeed * Time.deltaTime, 0f);
     }
 
     private void Initialize(MandelbulbCPU parent, int childIndex)
     {
-        mesh = parent.mesh;
+        maxTwist = parent.maxTwist;
+        maxRotationSpeed = parent.maxRotationSpeed;
+        spawnProbability = parent.spawnProbability;
+        meshes = parent.meshes;
+        materials = parent.materials;
         material = parent.material;
         maxDepth = parent.maxDepth;
         depth = parent.depth + 1;
@@ -58,12 +94,16 @@ public class MandelbulbCPU : MonoBehaviour {
 
     private IEnumerator CreateChildren()
     {
-        for(int i = 0; i<childDirections.Length; i++)
+        for (int i = 0; i < childDirections.Length; i++)
         {
-            yield return new WaitForSeconds(Random.Range(0.1f, 0.5f));
-            new GameObject("Fractal Child").AddComponent<MandelbulbCPU>().Initialize(this, i);
-            MeshNb++;
-            texte.text = "Mesh : " + MeshNb;
+            if (Random.value < spawnProbability)
+            {
+                yield return new WaitForSeconds(Random.Range(0.1f, 0.5f));
+                new GameObject("Fractal Child").AddComponent<MandelbulbCPU>().
+                    Initialize(this, i);
+                MeshNb++;
+                texte.text = ""+MeshNb;
+            }
         }
     }
 }
