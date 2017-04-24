@@ -1,41 +1,100 @@
-﻿Shader "Custom/Mandelbub" {
-	Properties {
-		_Color ("Color", Color) = (1,1,1,1)
-		_MainTex ("Albedo (RGB)", 2D) = "white" {}
-		_Glossiness ("Smoothness", Range(0,1)) = 0.5
-		_Metallic ("Metallic", Range(0,1)) = 0.0
+﻿Shader "Hidden/Mandelbub"
+{
+	Properties
+	{
+		_MainTex ("Texture", 2D) = "white" {}
 	}
-	SubShader {
-		Tags { "RenderType"="Opaque" }
-		LOD 200
-		
-		CGPROGRAM
-		// Physically based Standard lighting model, and enable shadows on all light types
-		#pragma surface surf Standard fullforwardshadows
+	SubShader
+	{
+		// No culling or depth
+		Cull Off ZWrite Off ZTest Always
 
-		// Use shader model 3.0 target, to get nicer looking lighting
-		#pragma target 3.0
+		Pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
 
-		sampler2D _MainTex;
+			#include "UnityCG.cginc"
 
-		struct Input {
-			float2 uv_MainTex;
-		};
+			struct appdata
+			{
+				float4 vertex : POSITION;
+				float2 uv : TEXCOORD0;
+			};
 
-		half _Glossiness;
-		half _Metallic;
-		fixed4 _Color;
+			struct v2f
+			{
+				float4 pos : SV_POSITION;
+    			float2 uv : TEXCOORD0;
+    			float3 ray : TEXCOORD1;
+			};
 
-		void surf (Input IN, inout SurfaceOutputStandard o) {
-			// Albedo comes from a texture tinted by color
-			fixed4 c = tex2D (_MainTex, IN.uv_MainTex) * _Color;
-			o.Albedo = c.rgb;
-			// Metallic and smoothness come from slider variables
-			o.Metallic = _Metallic;
-			o.Smoothness = _Glossiness;
-			o.Alpha = c.a;
+			uniform float4x4 _FrustumCornersES;
+			uniform sampler2D _MainTex;
+			uniform float4 _MainTex_TexelSize;
+			uniform float4x4 _CameraInvViewMatrix;
+			uniform float3 _CameraWS;
+
+			v2f vert (appdata v)
+			{
+				v2f o;
+
+				// Index passed via custom blit function in RaymarchGeneric.cs
+				half index = v.vertex.z;
+				v.vertex.z = 0.1;
+
+				o.pos = mul(UNITY_MATRIX_MVP, v.vertex);
+				o.uv = v.uv.xy;
+
+				#if UNITY_UV_STARTS_AT_TOP
+				if (_MainTex_TexelSize.y < 0)
+					o.uv.y = 1 - o.uv.y;
+				#endif
+
+				// Get the eyespace view ray (normalized)
+				o.ray = _FrustumCornersES[(int)index].xyz;
+
+				// Transform the ray from eyespace to worldspace
+				// Note: _CameraInvViewMatrix was provided by the script
+				o.ray = mul(_CameraInvViewMatrix, o.ray);
+				return o;
+			}
+
+			float SdSphere(float3 pos, float r){
+				return length(pos) - r;
+			}
+
+			float map(float3 pos){
+				return SdSphere(pos, 1.0);
+			}
+
+			fixed4 raymarch(float3 ro, float3 rd){
+
+				float t = 0;
+				for(int i = 0; i < 64; i++){
+					float d = map(ro + rd * t);
+					if(d < 0.01)
+					{
+						return fixed4(1.0, 1.0, 1.0, 1.0);
+					}
+					t += d;
+				}
+				return fixed4(0.0,0.0,0.0,0.0);
+			}
+
+			fixed4 frag (v2f i) : SV_Target
+			{
+				float3 rd = normalize(i.ray.xyz);
+    			// ray origin (camera position)
+    			float3 ro = _CameraWS;
+
+				fixed4 col = tex2D(_MainTex, i.uv);
+				fixed4 add = raymarch(ro, rd);
+				// fixed4 col = fixed4(i.ray, 1);
+				return fixed4(col*(1.0 - add.w) + add.xyz * add.w,1.0);
+			}
+			ENDCG
 		}
-		ENDCG
 	}
-	FallBack "Diffuse"
 }
